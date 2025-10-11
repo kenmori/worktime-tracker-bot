@@ -1,33 +1,34 @@
-import express from "express";
-import bodyParser from "body-parser";
 import { google } from "googleapis";
 import dayjs from "dayjs";
-import dotenv from "dotenv";
-dotenv.config();
+import { parse } from "querystring";
 
-const app = express();
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json()); // ← Slackの署名検証時などに必要
+export const config = {
+  api: {
+    bodyParser: false, // Slack互換
+  },
+};
 
-// Google Sheets 認証セットアップ
-const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-const auth = new google.auth.GoogleAuth({
-  credentials: creds,
-  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-});
-const sheets = google.sheets({ version: "v4", auth });
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).send("Method Not Allowed");
+  }
 
-// シートID
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+  // Slackはapplication/x-www-form-urlencoded形式でPOSTしてくる
+  let rawBody = "";
+  req.on("data", (chunk) => (rawBody += chunk.toString()));
+  await new Promise((resolve) => req.on("end", resolve));
 
-// Slackコマンド受け取り
-app.post("/api/slack/commands", async (req, res) => {
+  const payload = parse(rawBody);
+  const { command, text, user_id, user_name, team_id } = payload;
+
   try {
-    const { command, text, user_id, user_name, team_id } = req.body;
-
-    if (!command) {
-      return res.status(400).send("⚠️ Invalid request: missing command.");
-    }
+    const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    const auth = new google.auth.GoogleAuth({
+      credentials: creds,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+    const sheets = google.sheets({ version: "v4", auth });
+    const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
     const range = "A2:F";
     const sheetData = await sheets.spreadsheets.values.get({
@@ -51,20 +52,19 @@ app.post("/api/slack/commands", async (req, res) => {
 
     if (command === "/setworktime") {
       const total = parseFloat(text);
-      if (isNaN(total)) return res.send("⚠️ 数値を入力してください（例: /setworktime 160）");
       user.total = total;
       user.worked = 0;
     }
 
     if (command === "/addworktime") {
       const add = parseFloat(text);
-      if (isNaN(add)) return res.send("⚠️ 数値を入力してください（例: /addworktime 7.5）");
       user.worked += add;
     }
 
     const values = [
       [user.team_id, user.user_id, user.user_name, user.total, user.worked, now],
     ];
+
     if (findRow >= 0) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_ID,
@@ -83,21 +83,25 @@ app.post("/api/slack/commands", async (req, res) => {
 
     if (command === "/remaining") {
       const remaining = (user.total - user.worked).toFixed(2);
-      return res.send(`📊 <@${user_id}> 残り: *${remaining}h* (合計${user.total}h / 消化${user.worked}h)`);
+      return res.send(
+        `📊 <@${user_id}> 残り: *${remaining}h* (合計${user.total}h / 消化${user.worked}h)`
+      );
     }
 
     if (command === "/teamremaining") {
       const totalSum = rows.reduce((sum, r) => sum + parseFloat(r[3] || 0), 0);
       const workedSum = rows.reduce((sum, r) => sum + parseFloat(r[4] || 0), 0);
       const remainingSum = (totalSum - workedSum).toFixed(2);
-      return res.send(`🏢 チーム全体 残り: *${remainingSum}h* (合計${totalSum}h / 消化${workedSum}h)`);
+      return res.send(
+        `🏢 チーム全体 残り: *${remainingSum}h* (合計${totalSum}h / 消化${workedSum}h)`
+      );
     }
 
-    return res.send(`✅ <@${user_id}> 更新しました (合計${user.total}h / 消化${user.worked}h)`);
+    return res.send(
+      `✅ <@${user_id}> 更新しました (合計${user.total}h / 消化${user.worked}h)`
+    );
   } catch (err) {
-    console.error("Slack command error:", err);
-    return res.status(500).send("💥 Internal server error");
+    console.error("❌ Slack command error:", err);
+    return res.status(500).send(`Error: ${err.message}`);
   }
-});
-
-app.listen(3000, () => console.log("⚡️ Worktime Bot running on port 3000"));
+}
