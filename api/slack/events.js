@@ -28,7 +28,7 @@ export default async function handler(req, res) {
 
     // ✅ 通常メッセージイベント
     if (body.event && body.event.type === "message" && !body.event.bot_id) {
-      const text = body.event.text;
+      const text = body.event.text || "";
       const user = body.event.user;
       console.log("💬 Message received:", text);
 
