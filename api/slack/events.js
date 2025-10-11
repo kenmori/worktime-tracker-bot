@@ -13,17 +13,19 @@ export default async function handler(req, res) {
     // Slack からの challenge 検証を確実にキャッチ
     const rawBody = await new Promise((resolve) => {
       let data = "";
-      req.on("data", (chunk) => (data += chunk));
+      req.on("data", (chunk) => (data += chunk.toString()));
       req.on("end", () => resolve(data));
     });
 
+    console.log("Raw body received:", rawBody);
     const body = JSON.parse(rawBody || "{}");
+    console.log("Parsed body:", body);
 
     // ✅ URL Verification 対応
     if (body.type === "url_verification") {
-      console.log("✅ Slack challenge received");
+      console.log("✅ Slack challenge received:", body.challenge);
       res.setHeader("Content-Type", "text/plain");
-      return res.status(200).send(body.challenge);
+      return res.status(200).end(body.challenge);
     }
 
     // ✅ 通常イベント
