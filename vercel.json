@@ -1,1 +1,7 @@
-{}
+{
+  "functions": {
+    "api/slack/events.js": {
+      "runtime": "@vercel/node"
+    }
+  }
+}
