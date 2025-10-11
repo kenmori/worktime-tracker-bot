@@ -1,8 +1,6 @@
 {
   "version": 2,
-  "functions": {
-    "api/slack/events.js": {
-      "runtime": "@vercel/node@3.0.0"
-    }
-  }
+  "builds": [
+    { "src": "api/**/*.js", "use": "@vercel/node" }
+  ]
 }
