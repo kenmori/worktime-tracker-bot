@@ -19,7 +19,7 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: "v4", auth });
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
-// 💬 Slackメッセージ送信
+// Slackメッセージ送信
 async function sendMessage(channel, text) {
   const token = process.env.SLACK_BOT_TOKEN;
   await fetch("https://slack.com/api/chat.postMessage", {
@@ -32,7 +32,7 @@ async function sendMessage(channel, text) {
   });
 }
 
-// 🔍 シートからユーザー行取得
+//  シートからユーザー行取得
 async function findRow(userId) {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
